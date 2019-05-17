@@ -24,8 +24,27 @@ App = {
   },
 
   initWeb3: async function() {
+    // Arbitrum
+    if (true) {
+        // Load compiled.json
+        const contracts_promise = new Promise(function(resolve, reject) {
+          $.getJSON('compiled.json', function(data) {
+            resolve(data)
+          })
+          .fail(function (jqhr, textStatus, error) {
+            reject("Failed to load compiled.json. " + textStatus + ": " + error)
+          });
+        });
+
+        const contracts = await contracts_promise;
+        App.web3Provider = new ArbProvider(
+            'http://localhost:1235',
+            contracts,
+            new Web3.providers.HttpProvider('http://localhost:7545')
+        );
+    }
     // Modern dapp browsers...
-    if (window.ethereum) {
+    else if (window.ethereum) {
       App.web3Provider = window.ethereum;
       try {
         // Request account access
