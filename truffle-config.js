@@ -14,7 +14,7 @@ module.exports = {
     arbitrum: {
       provider: ArbProvider.provider(
         __dirname,
-	'build/contracts',
+        'build/contracts',
         {
           'mnemonic': mnemonic,
         }
