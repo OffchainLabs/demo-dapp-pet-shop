@@ -24,27 +24,8 @@ App = {
   },
 
   initWeb3: async function() {
-    // Arbitrum
-    if (true) {
-        // Load compiled.json
-        const contracts_promise = new Promise(function(resolve, reject) {
-          $.getJSON('compiled.json', function(data) {
-            resolve(data)
-          })
-          .fail(function (jqhr, textStatus, error) {
-            reject("Failed to load compiled.json. " + textStatus + ": " + error)
-          });
-        });
-
-        const contracts = await contracts_promise;
-        App.web3Provider = new ArbProvider(
-            'http://localhost:1235',
-            contracts,
-            new Web3.providers.HttpProvider('http://localhost:7545')
-        );
-    }
     // Modern dapp browsers...
-    else if (window.ethereum) {
+    if (window.ethereum) {
       App.web3Provider = window.ethereum;
       try {
         // Request account access
@@ -62,6 +43,22 @@ App = {
     else {
       App.web3Provider = new Web3.providers.HttpProvider('http://localhost:7545');
     }
+
+    const contracts_promise = new Promise(function(resolve, reject) {
+      $.getJSON('compiled.json', function(data) {
+        resolve(data)
+      })
+      .fail(function (jqhr, textStatus, error) {
+        reject("Failed to load compiled.json. " + textStatus + ": " + error)
+      });
+    });
+
+    const contracts = await contracts_promise;
+    App.web3Provider = new ArbProvider(
+      'http://localhost:1235',
+      contracts,
+      App.web3Provider
+    );
     web3 = new Web3(App.web3Provider);
 
     return App.initContract();
@@ -126,7 +123,7 @@ App = {
       }).then(function(result) {
         return App.markAdopted();
       }).catch(function(err) {
-        console.log(err.message);
+        console.log("Error calling adopt", err.message);
       });
     });
   }

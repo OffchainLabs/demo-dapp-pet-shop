@@ -12,13 +12,18 @@ module.exports = {
       network_id: "*" // Match any network id
     },
     arbitrum: {
-      provider: ArbProvider.provider(
-        __dirname,
-        'build/contracts',
-        {
-          'mnemonic': mnemonic,
+      provider: function() {
+        if(typeof this.provider.prov == 'undefined') {
+            this.provider.prov = ArbProvider.provider(
+              __dirname,
+              'build/contracts',
+              {
+                'mnemonic': mnemonic,
+              }
+            );
         }
-      ),
+        return this.provider.prov
+      },
       network_id: "*",
     }
   }
