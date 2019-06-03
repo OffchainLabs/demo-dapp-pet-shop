@@ -58618,22 +58618,25 @@ class ArbClient {
   }
 
   findLogs(fromBlock, toBlock, address, topics) {
-    return self.client.request(
-      'Validator.FindLogs',
-      [{
-        "fromHeight": fromBlock,
-        "toHeight": toBlock,
-        "address": address,
-        "topics": topics
-      }],
-      function(err, error, result) {
-        if (err) {
-          reject(error)
-        } else {
-          resolve(result["logs"])
+    let self = this
+    return new Promise(function(resolve, reject) {
+      return self.client.request(
+        'Validator.FindLogs',
+        [{
+          "fromHeight": fromBlock,
+          "toHeight": toBlock,
+          "address": address,
+          "topics": topics
+        }],
+        function(err, error, result) {
+          if (err) {
+            reject(error)
+          } else {
+            resolve(result["logs"])
+          }
         }
-      }
-    )
+      )
+    })
   }
 
   getVmID() {
@@ -58781,7 +58784,6 @@ class ArbProvider extends ethers.providers.BaseProvider {
     }
 
     async call(transaction) {
-      console.log("Making call")
       let dest = await transaction.to
       let contractData = this.contracts[dest.toLowerCase()]
       if (contractData) {
