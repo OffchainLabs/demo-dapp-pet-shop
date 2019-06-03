@@ -58091,6 +58091,7 @@ class IntValue extends Value {
     }
 
     hash() {
+        console.log(this.bignum)
         return utils.solidityKeccak256(['uint256'], [this.bignum]);
     }
 
@@ -58590,17 +58591,19 @@ class ArbClient {
       })
   }
 
-  call(address, data, sender) {
+  call(value, sender) {
+    console.log("Call1")
     let self = this
     return new Promise(function(resolve, reject) {
+      console.log("Call2")
       self.client.request(
         'Validator.CallMessage',
         [{
-          "address": address,
-          "data": data,
+          "data": ArbValue.marshal(value),
           "sender": sender
         }],
         function(err, error, result) {
+          console.log("Call3", err, error, result)
           if (err) {
             reject(err)
           } else if (error) {
@@ -58609,7 +58612,7 @@ class ArbClient {
             if (result["Success"]) {
               resolve(result["ReturnVal"])
             } else {
-              resolve(null)
+              reject(new Error("Call was reverted"))
             }
           }
         }
@@ -58787,12 +58790,21 @@ class ArbProvider extends ethers.providers.BaseProvider {
       let dest = await transaction.to
       let contractData = this.contracts[dest.toLowerCase()]
       if (contractData) {
-        let result = await this.client.call(
-          dest,
-          transaction.data,
-          await this.provider.getSigner(0).getAddress()
+        var maxSeq = ethers.utils.bigNumberify(2)
+        for (var i = 0; i < 255; i++) {
+          maxSeq = maxSeq.mul(2);
+        }
+        maxSeq = maxSeq.sub(2)
+        let arbMsg = new ArbValue.TupleValue([
+          ArbValue.hexToSizedByteRange(transaction.data),
+          new ArbValue.IntValue(dest),
+          new ArbValue.IntValue(maxSeq)
+        ]);
+        let sender = await this.provider.getSigner(0).getAddress()
+        return this.client.call(
+          arbMsg,
+          sender
         )
-        return result
       } else {
         return self.provider.call(transaction)
       }
@@ -58833,7 +58845,6 @@ class ArbWallet extends ethers.Signer {
       if (self.contracts[dest.toLowerCase()]) {
         self.seq = self.seq.add(2)
         let vmId = await self.client.getVmID()
-        let seqHex = self.seq.toHexString()
         let encodedData = ArbValue.hexToSizedByteRange(transaction.data)
         let arbMsg = new ArbValue.TupleValue([
           encodedData,
