@@ -266,7 +266,25 @@ exports.clearImmediate = typeof clearImmediate === "function" ? clearImmediate :
 };
 }).call(this,require("timers").setImmediate,require("timers").clearImmediate)
 },{"process/browser.js":2,"timers":3}],4:[function(require,module,exports){
-module.exports = require('./lib/index.js')
+/*
+ * Copyright 2019, Offchain Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+"use strict";
+
+module.exports = require("./lib/index.js")
+
 },{"./lib/index.js":7}],5:[function(require,module,exports){
 module.exports={
   "contractName": "VMTracker",
@@ -58003,25 +58021,47 @@ module.exports={
   }
 }
 },{}],6:[function(require,module,exports){
-const ethers = require('ethers');
+(function (process){
+/*
+ * Copyright 2019, Offchain Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+"use strict";
+
+const ethers = require("ethers");
 const utils = ethers.utils;
+
+// Error and Halt opcodes
+const OP_CODE_ERROR = 0x74;
+const OP_CODE_HALT = 0x75;
 
 // Valid opcode ranges (inclusive)
 const OP_CODE_RANGES =
-    [
-        [0x00, 0x0b],
-        [0x10, 0x1a],
-        [0x20, 0x20],
-        [0x30, 0x3f],
-        [0x40, 0x44],
-        [0x50, 0x53],
-        [0x60, 0x61],
-        [0x70, 0x72],
-    ]
+  [
+    [0x01, 0x0a],
+    [0x10, 0x1b],
+    [0x20, 0x21],
+    [0x30, 0x3d],
+    [0x40, 0x44],
+    [0x50, 0x52],
+    [0x60, 0x61],
+    [0x70, 0x75],
+  ]
 const VALID_OP_CODES = OP_CODE_RANGES.reduce(
-    ((acc, range) => acc.concat(
-        Array(range[1] - range[0] + 1).fill().map((_, i) => range[0] + i)
-    )), []
+  ((acc, range) => acc.concat(
+    Array(range[1] - range[0] + 1).fill().map((_, i) => range[0] + i)
+  )), []
 );
 
 // Max tuple size
@@ -58034,171 +58074,157 @@ const TYPE_HASH       = 2;
 const TYPE_TUPLE_0    = 3;
 const TYPE_TUPLE_MAX  = 3 + MAX_TUPLE_SIZE;
 
-// Flips endianness by reversing the bytes in a hex string. Must not have "0x".
-const flipEndian = (s) => s.match(/.{1,2}/g).reverse().join("");
-
 // Extracts first n bytes from s returning two separate strings as list
 const extractBytes = (s, n) => {
-    if (n < 0 || n*2 > s.length) {
-        throw "Error extracting bytes: string is too short";
-    }
-    return [s.substring(0, n*2), s.substring(n*2, s.length)];
+  if (n < 0 || n*2 > s.length) {
+    throw "Error extracting bytes: string is too short";
+  }
+  return [s.substring(0, n*2), s.substring(n*2, s.length)];
 }
 
 // Convert unsigned int i to hexstring of n bytes. Does not include "0x".
-const intToBytes = (i, n) => i.toString(16).padStart(n*2, '0');
+const intToBytes = (i, n) => i.toString(16).padStart(n*2, "0");
 
-// Convert BigNumber to hexstring of 32 bytes. Does not include "0x".
-const bigNumToBytes = (bn) => bn.toHexString().slice(2).padStart(32*2, '0');
+// Convert unsigned BigNumber to hexstring of 32 bytes. Does not include "0x".
+const uBigNumToBytes = (bn) => bn.toHexString().slice(2).padStart(32*2, "0");
 
 // Operation identifiers
 const BASIC_OP_IMM_COUNT = 0;
 const IMM_OP_IMM_COUNT   = 1;
 
 class Operation {
-    // opcode: 1 byte number
-    constructor(opcode) {
-        this.opcode = opcode;
-    }
+  // opcode: 1 byte number
+  constructor(opcode) {
+    this.opcode = opcode;
+  }
 }
 
 class BasicOp extends Operation {
-    constructor(opcode) {
-        super(opcode);
-        this.immCount = BASIC_OP_IMM_COUNT;
-    }
+  constructor(opcode) {
+    super(opcode);
+    this.immCount = BASIC_OP_IMM_COUNT;
+  }
 }
 
 class ImmOp extends Operation {
-    constructor(opcode, val) {
-        super(opcode);
-        this.immCount = IMM_OP_IMM_COUNT;
-        this.val = val;
-    }
+  constructor(opcode, val) {
+    super(opcode);
+    this.immCount = IMM_OP_IMM_COUNT;
+    this.val = val;
+  }
 }
 
 class Value {
-    hash() { throw "unimplemented" }
-    typeCode() { throw "unimplemented" }
+  hash() { throw "unimplemented"; }
+  typeCode() { throw "unimplemented"; }
 }
 
 class IntValue extends Value {
-    // bignum: 32 byte integer (BigNumber)
-    constructor(bignum) {
-        super();
-        this.bignum = ethers.utils.bigNumberify(bignum);
-        this.typeCode = () => TYPE_INT;
-    }
+  // bignum: 32 byte integer (BigNumber)
+  constructor(bignum) {
+    super();
+    this.bignum = ethers.utils.bigNumberify(bignum);
+    this.typeCode = () => TYPE_INT;
+  }
 
-    hash() {
-        console.log(this.bignum)
-        return utils.solidityKeccak256(['uint256'], [this.bignum]);
-    }
+  hash() {
+    return utils.solidityKeccak256(["uint256"], [this.bignum]);
+  }
 
-    toString() {
-        return this.bignum.toString()
-    }
+  toString() {
+    return this.bignum.toString()
+  }
 }
 
 class CodePointValue extends Value {
-    // insnNum: 8 byte integer
-    // op: BasicOp or ImmOp
-    // nextHash: 32 byte hash
-    constructor(insnNum, op, nextHash) {
-        super();
-        this.insnNum = insnNum;
-        this.op = op;
-        this.nextHash = nextHash;
-        this.typeCode = () => TYPE_CODE_POINT;
-        let zero = utils.formatBytes32String("");
-        let one = zero.slice(0, -1) + '1';
-        this.haltCodePointHash = zero;
-        this.errorCodePointHash = one;
-    }
+  // insnNum: 8 byte integer
+  // op: BasicOp or ImmOp
+  // nextHash: 32 byte hash
+  constructor(insnNum, op, nextHash) {
+    super();
+    this.insnNum = insnNum;
+    this.op = op;
+    this.nextHash = nextHash;
+    this.typeCode = () => TYPE_CODE_POINT;
+  }
 
-    hash() {
-        if (this.insnNum === -1) {
-            return this.haltCodePointHash();
-        } else if (this.insnNum === -2) {
-            return this.errorCodePointHash;
-        }
-
-        if (this.op instanceof BasicOp) {
-            // 34 bytes total (2 + 32)
-            let packed = new uint8Array(
-                [this.typeCode(), this.op.opcode].concat(this.nextHash)
-            );
-            return utils.keccak256(packed);
-        } else if (this.op instanceof ImmOp) {
-            // 66 bytes total (2 + 32 + 32)
-            let packed = new uint8Array(
-                [this.typeCode(), this.op.opcode].concat(this.op.val.hash())
-                    .concat(this.nextHash)
-            );
-            return utils.keccak256(packed);
-        } else {
-            throw "Error: CodePointValue must be instanceof BasicOp or ImmOp";
-        }
+  hash() {
+    if (this.op instanceof BasicOp) {
+      // 34 bytes total (2 + 32)
+      let packed = new Uint8Array(
+        [this.typeCode(), this.op.opcode].concat(this.nextHash)
+      );
+      return utils.keccak256(packed);
+    } else if (this.op instanceof ImmOp) {
+      // 66 bytes total (2 + 32 + 32)
+      let packed = new Uint8Array(
+        [this.typeCode(), this.op.opcode].concat(this.op.val.hash())
+          .concat(this.nextHash)
+      );
+      return utils.keccak256(packed);
+    } else {
+      throw "Error: CodePointValue must be instanceof BasicOp or ImmOp";
     }
+  }
 }
 
 class HashOnlyValue extends Value {
-    // hash: 32 byte hash
-    // size: 8 byte integer
-    constructor(hash, size) {
-        super();
-        this.hash = () => hash;
-        this.size = size;
-        this.typeCode = () => TYPE_HASH;
-    }
+  // hash: 32 byte hash
+  // size: 8 byte integer
+  constructor(hash, size) {
+    super();
+    this.hash = () => hash;
+    this.size = size;
+    this.typeCode = () => TYPE_HASH;
+  }
 }
 
 class TupleValue extends Value {
-    // contents: array of Value(s)
-    // size: num of Value(s) in contents
-    constructor(contents) {
-        if (contents.length > MAX_TUPLE_SIZE) {
-            throw ("Error TupleValue: illegal size " + contents.length);
-        }
-        super();
-        this.contents = contents;
-        this.typeCode = () => TYPE_TUPLE_0 + this.contents.length;
-        // Calculate the hash
-        this.calcHash = () => {
-            let hashes = this.contents.map((value, _) => value.hash());
-            let types = ['uint8'].concat(Array(contents.length).fill('bytes32'));
-            return utils.solidityKeccak256(types, [this.typeCode()].concat(hashes));
-        }
-        let hash = this.calcHash();
-        this.hash = () => hash;
+  // contents: array of Value(s)
+  // size: num of Value(s) in contents
+  constructor(contents) {
+    if (contents.length > MAX_TUPLE_SIZE) {
+      throw ("Error TupleValue: illegal size " + contents.length);
     }
+    super();
+    this.contents = contents;
+    this.typeCode = () => TYPE_TUPLE_0 + this.contents.length;
+    // Calculate the hash
+    this.calcHash = () => {
+      let hashes = this.contents.map((value, _) => value.hash());
+      let types = ["uint8"].concat(Array(contents.length).fill("bytes32"));
+      return utils.solidityKeccak256(types, [this.typeCode()].concat(hashes));
+    }
+    let hash = this.calcHash();
+    this.hash = () => hash;
+  }
 
-    // index: uint8
-    get(index) {
-        if (index < 0 || index >= this.contents.length) {
-            throw ("Error TupleValue get: index out of bounds " + index);
-        }
-        return this.contents[index];
+  // index: uint8
+  get(index) {
+    if (index < 0 || index >= this.contents.length) {
+      throw ("Error TupleValue get: index out of bounds " + index);
     }
+    return this.contents[index];
+  }
 
-    // Non-mutating
-    // index: uint8
-    // value: *Value
-    set(index, value) {
-        if (index < 0 || index >= this.contents.length) {
-            throw ("Error TupleValue set: index out of bounds " + index);
-        }
-        let contents = [...this.contents];
-        contents[index] = value;
-        return new TupleValue(contents);
+  // Non-mutating
+  // index: uint8
+  // value: *Value
+  set(index, value) {
+    if (index < 0 || index >= this.contents.length) {
+      throw ("Error TupleValue set: index out of bounds " + index);
     }
+    let contents = [...this.contents];
+    contents[index] = value;
+    return new TupleValue(contents);
+  }
 
-    toString() {
-        let ret = "Tuple(["
-        ret += this.contents.map(val => val.toString()).join(", ")
-        ret += "])"
-        return ret
-    }
+  toString() {
+    let ret = "Tuple(["
+    ret += this.contents.map(val => val.toString()).join(", ")
+    ret += "])"
+    return ret
+  }
 }
 
 // Useful for BigTuple operations
@@ -58209,14 +58235,14 @@ const LAST_INDEX_BIG_NUM = utils.bigNumberify(LAST_INDEX);
 // index: BigNumber
 // returns: *Value
 function getBigTuple(tuple, index) {
-    if (tuple.contents.length === 0) {
-        return new IntValue(utils.bigNumberify(0));
-    } else if (index.isZero()) {
-        return tuple.get(LAST_INDEX);
-    } else {
-        let subTup = tuple.get(index.mod(LAST_INDEX_BIG_NUM).toNumber());
-        return getBigTuple(subTup, index.div(LAST_INDEX_BIG_NUM));
-    }
+  if (tuple.contents.length === 0) {
+    return new IntValue(utils.bigNumberify(0));
+  } else if (index.isZero()) {
+    return tuple.get(LAST_INDEX);
+  } else {
+    let subTup = tuple.get(index.mod(LAST_INDEX_BIG_NUM).toNumber());
+    return getBigTuple(subTup, index.div(LAST_INDEX_BIG_NUM));
+  }
 }
 
 // tuple: TupleValue
@@ -58224,452 +58250,495 @@ function getBigTuple(tuple, index) {
 // value: *Value
 // Non-Mutating returns TupleValue
 function setBigTuple(tupleValue, index, value) {
-    let tuple = tupleValue;
-    if (tuple.contents.length === 0) {
-        tuple = new TupleValue(Array(MAX_TUPLE_SIZE).fill(new TupleValue([])));
-    }
+  let tuple = tupleValue;
+  if (tuple.contents.length === 0) {
+    tuple = new TupleValue(Array(MAX_TUPLE_SIZE).fill(new TupleValue([])));
+  }
 
-    if (index.isZero()) {
-        return tuple.set(LAST_INDEX, value);
-    } else {
-        let path = index.mod(LAST_INDEX_BIG_NUM).toNumber();
-        let subTup = tuple.get(path);
-        let newSubTup = setBigTuple(subTup, index.div(LAST_INDEX_BIG_NUM), value);
-        return tuple.set(path, newSubTup);
-    }
+  if (index.isZero()) {
+    return tuple.set(LAST_INDEX, value);
+  } else {
+    let path = index.mod(LAST_INDEX_BIG_NUM).toNumber();
+    let subTup = tuple.get(path);
+    let newSubTup = setBigTuple(subTup, index.div(LAST_INDEX_BIG_NUM), value);
+    return tuple.set(path, newSubTup);
+  }
 }
 
 // twoTupleValue: (byterange: SizedTupleValue, size: IntValue)
 function sizedByteRangeToHex(twoTupleValue) {
-    let byterange = twoTupleValue.get(0);
-    let size = twoTupleValue.get(1).bignum;
-    let accumulator = '';
-    for (let i = utils.bigNumberify(0); i.lt(size); i = i.add(1)) {
-        let value = getBigTuple(byterange, i);
-        accumulator += value.bignum.toHexString().slice(2);
-    }
-    return '0x' + accumulator.slice(0, 2*size);
+  let byterange = twoTupleValue.get(0);
+  let size = twoTupleValue.get(1).bignum;
+  let accumulator = "";
+  for (let i = utils.bigNumberify(0); i.lt(size); i = i.add(1)) {
+    let value = getBigTuple(byterange, i);
+    accumulator += value.bignum.toHexString().slice(2);
+  }
+  return "0x" + accumulator.slice(0, 2*size);
 }
 
 // hexString: must be a byte string (hexString.length % 2 === 0)
 function hexToSizedByteRange(hexString) {
-    let h = hexString;
-    // Remove prefix
-    if (h.slice(0, 2) === '0x') {
-        h = hexString.slice(2);
-    }
+  let h;
+  // Remove prefix
+  if (hexString.slice(0, 2) === "0x") {
+    h = hexString.slice(2);
+  } else {
+    h = hexString;
+  }
 
-    // Emtpy tuple
-    let t = new TupleValue([]);
+  // Emtpy tuple
+  let t = new TupleValue([]);
 
-    // Array of 32B BigNums
-    // TODO: Check endianness of entering into the tuple
-    let numBytes = h.length / 2;
-    let size = utils.bigNumberify(Math.ceil(numBytes / 32));
-    for (let i = utils.bigNumberify(0); i.lt(size); i = i.add(1)) {
-        // TODO for hexnum see: https://github.com/OffchainLabs/arb-avm/blob/6b67cd8cdde54735fbe76c7c5667a33e2c742756/evm/data.go#L149
-        let hexnum = h.slice(i*32*2, i*32*2 + 32*2).padEnd(2*32, '0');
-        let bignum = utils.bigNumberify('0x' + hexnum);
-        t = setBigTuple(t, i, new IntValue(bignum));
-    }
-    return new TupleValue([t, new IntValue(h.length / 2)])
+  // Array of 32B BigNums
+  let numBytes = h.length / 2;
+  let size = utils.bigNumberify(Math.ceil(numBytes / 32));
+  for (let i = utils.bigNumberify(0); i.lt(size); i = i.add(1)) {
+    let hexnum = h.slice(i*32*2, i*32*2 + 32*2).padEnd(2*32, "0");
+    let bignum = utils.bigNumberify("0x" + hexnum);
+    t = setBigTuple(t, i, new IntValue(bignum));
+  }
+  return new TupleValue([t, new IntValue(h.length / 2)])
 }
 
 function marshal(someValue) {
-    return _marshalValue('0x', someValue);
+  return _marshalValue("0x", someValue);
 }
 
 function _marshalValue(acc, v) {
-    let ty = v.typeCode();
-    let accTy = acc + intToBytes(ty, 1);
-    if (ty === TYPE_INT) {
-        // 1B type; 32B hex int
-        return accTy + bigNumToBytes(v.bignum);
-    } else if (ty === TYPE_CODE_POINT) {
-        // 1B type; 8B LittleEndian insnNum; 1B immCount; 1B opcode; Val?; 32B hash
-        let packed = (accTy + flipEndian(intToBytes(v.insnNum, 8)) +
-                      intToBytes(v.op.immCount, 1) + intToBytes(v.op.opcode, 1));
-        if (v.op.immCount === BASIC_OP_IMM_COUNT) {
-            return packed + v.nextHash.slice(2);
-        } else if (v.op.immCount === IMM_OP_IMM_COUNT) {
-            return _marshalValue(packed, v.op.val) + v.nextHash.slice(2);
-        }
-    } else if (ty === TYPE_HASH) {
-        // 1B type; 8B LittleEndian size; 32B hash
-        return accTy + flipEndian(intToBytes(v.size, 8)) + v.hash.slice(2);
-    } else if (ty >= TYPE_TUPLE_0 && ty <= TYPE_TUPLE_MAX) {
-        // 1B type; (ty-TYPE_TUPLE_0) number of Values
-        for (let i = 0; i < v.contents.length; i++) {
-            accTy = _marshalValue(accTy, v.contents[i]);
-        }
-        return accTy;
+  let ty = v.typeCode();
+  let accTy = acc + intToBytes(ty, 1);
+  if (ty === TYPE_INT) {
+    // 1B type; 32B hex int
+    if (v.bignum.lt(0)) {
+      throw "Error marshaling IntValue: negative values not supported";
     }
+    return accTy + uBigNumToBytes(v.bignum);
+  } else if (ty === TYPE_CODE_POINT) {
+    // 1B type; 8B insnNum; 1B immCount; 1B opcode; Val?; 32B hash
+    let packed = (accTy + intToBytes(v.insnNum, 8) +
+                  intToBytes(v.op.immCount, 1) + intToBytes(v.op.opcode, 1));
+    if (v.op.immCount === BASIC_OP_IMM_COUNT) {
+      return packed + v.nextHash.slice(2);
+    } else if (v.op.immCount === IMM_OP_IMM_COUNT) {
+      return _marshalValue(packed, v.op.val) + v.nextHash.slice(2);
+    } else {
+      throw ("Error marshaling CodePointValue illegal immCount: " + v.op.immCount);
+    }
+  } else if (ty === TYPE_HASH) {
+    // 1B type; 8B size; 32B hash
+    return accTy + intToBytes(v.size, 8) + v.hash().slice(2);
+  } else if (ty >= TYPE_TUPLE_0 && ty <= TYPE_TUPLE_MAX) {
+    // 1B type; (ty-TYPE_TUPLE_0) number of Values
+    for (let i = 0; i < v.contents.length; i++) {
+      accTy = _marshalValue(accTy, v.contents[i]);
+    }
+    return accTy;
+  } else {
+    throw ("Error marshaling value no such TYPE: " + ty);
+  }
 }
 
 function unmarshal(hexString) {
-    let h = hexString;
-    // Remove prefix if exists
-    if (h.slice(0, 2) === '0x') {
-        h = h.slice(2);
-    }
-    return _unmarshalValue(h)[0];
+  let h = hexString;
+  // Remove prefix if exists
+  if (h.slice(0, 2) === "0x") {
+    h = h.slice(2);
+  }
+  return _unmarshalValue(h)[0];
 }
 
 function _unmarshalValue(hexString) {
-    let [head, tail] = extractBytes(hexString, 1);
+  var head, tail, contents, op;
+  [head, tail] = extractBytes(hexString, 1);
 
-    let ty = parseInt(head, 16);
-    if (ty === TYPE_INT) {
-        [head, tail] = extractBytes(tail, 32);
-        let i = utils.bigNumberify('0x' + head);
-        return [new IntValue(i), tail];
-    } else if (ty === TYPE_CODE_POINT) {
-        [head, tail] = extractBytes(tail, 8);
-        let pc = utils.bigNumberify(flipEndian(head)); // pc encoded as Little Endian
-        let [op, tail] = unmarshalOp(tail);
-        [head, tail] = extractBytes(tail, 32);
-        let nextHash = '0x' + head;
-        return [new CodePointValue(pc, op, nextHash), tail];
-    } else if (ty === TYPE_HASH) {
-        throw "Error unmarshalling: hash only value was not expected";
-        [head, tail] = extractBytes(tail, 8);
-        let size = parseInt(flipEndian(head), 16); // size encoded as Little Endian
-        [head, tail] = extractBytes(tail, 32);
-        let hash = '0x' + head;
-        return [new HashOnlyValue(hash, size), tail];
-    } else if (ty >= TYPE_TUPLE_0 && ty <= TYPE_TUPLE_MAX) {
-        let size = ty - TYPE_TUPLE_0;
-        [contents, tail] = unmarshalTuple(tail, size);
-        return [new TupleValue(contents), tail];
-    } else {
-        throw ("Error unmarshalling: invalid value type " + ty);
-    }
+  let ty = parseInt(head, 16);
+  if (ty === TYPE_INT) {
+    [head, tail] = extractBytes(tail, 32);
+    let i = utils.bigNumberify("0x" + head);
+    return [new IntValue(i), tail];
+  } else if (ty === TYPE_CODE_POINT) {
+    [head, tail] = extractBytes(tail, 8);
+    let pc = utils.bigNumberify(head);
+    [op, tail] = unmarshalOp(tail);
+    [head, tail] = extractBytes(tail, 32);
+    let nextHash = "0x" + head;
+    return [new CodePointValue(pc, op, nextHash), tail];
+  } else if (ty === TYPE_HASH) {
+    [head, tail] = extractBytes(tail, 8);
+    let size = parseInt(head, 16);
+    [head, tail] = extractBytes(tail, 32);
+    let hash = "0x" + head;
+    // return [new HashOnlyValue(hash, size), tail];
+    throw "Error unmarshaling: HashOnlyValue was not expected";
+  } else if (ty >= TYPE_TUPLE_0 && ty <= TYPE_TUPLE_MAX) {
+    let size = ty - TYPE_TUPLE_0;
+    [contents, tail] = unmarshalTuple(tail, size);
+    return [new TupleValue(contents), tail];
+  } else {
+    throw ("Error unmarshaling value no such TYPE: " + ty.toString(16));
+  }
 }
 
 function unmarshalOp(hexString) {
-    let [head, tail] = extractBytes(hexString, 1);
-    let immCount = parseInt(head, 16);
-    if (immCount === BASIC_OP_IMM_COUNT) {
-        [opcode, tail] = unmarshalOpCode(tail);
-        return [BasicOp(opcode), tail]
-    } else if (immCount === IMM_OP_IMM_COUNT) {
-        [opcode, tail] = unmarshalOpCode(tail);
-        [value, tail] = _unmarshalValue(tail);
-        return [ImmOp(opcode, value), tail]
-    } else {
-        throw "Error unmarshalling operand: immediate count must be 0 or 1";
-    }
+  var head, tail, opcode, value;
+  [head, tail] = extractBytes(hexString, 1);
+  let immCount = parseInt(head, 16);
+  if (immCount === BASIC_OP_IMM_COUNT) {
+    [opcode, tail] = unmarshalOpCode(tail);
+    return [new BasicOp(opcode), tail]
+  } else if (immCount === IMM_OP_IMM_COUNT) {
+    [opcode, tail] = unmarshalOpCode(tail);
+    [value, tail] = _unmarshalValue(tail);
+    return [new ImmOp(opcode, value), tail]
+  } else {
+    throw ("Error unmarshalOp no such immCount: 0x" + immCount.toString(16));
+  }
 }
 
 function unmarshalOpCode(hexString) {
-    let [head, tail] = extractBytes(hexString, 1);
-    let opcode = parseInt(head, 16);
-    if (!VALID_OP_CODES.includes(opcode)) {
-        throw ("Error unmarshalling: Invalid opcode: " + opcode)
-    }
-    return opcode;
+  let [head, tail] = extractBytes(hexString, 1);
+  let opcode = parseInt(head, 16);
+  if (!VALID_OP_CODES.includes(opcode)) {
+    throw ("Error unmarshalOpCode no such opcode: 0x" + opcode.toString(16));
+  }
+  return [opcode, tail];
 }
 
 function unmarshalTuple(hexString, size) {
-    let contents = new Array(size);
-    let value = undefined;
-    let tail = hexString;
-    for (let i = 0; i < size; i++) {
-        [value, tail] = _unmarshalValue(tail);
-        contents[i] = value;
-    }
-    return [contents, tail];
+  let contents = new Array(size);
+  let value = undefined;
+  let tail = hexString;
+  for (let i = 0; i < size; i++) {
+    [value, tail] = _unmarshalValue(tail);
+    contents[i] = value;
+  }
+  return [contents, tail];
 }
 
 module.exports = {
-    Value: Value,
-    TupleValue: TupleValue,
-    IntValue: IntValue,
-    CodePointValue: CodePointValue,
+  getBigTuple,
+  setBigTuple,
 
-    marshal: marshal,
-    unmarshal: unmarshal,
+  IntValue,
+  CodePointValue,
+  HashOnlyValue,
+  TupleValue,
 
-    hexToSizedByteRange: hexToSizedByteRange,
-    sizedByteRangeToHex: sizedByteRangeToHex
+  marshal,
+  unmarshal,
+
+  hexToSizedByteRange,
+  sizedByteRangeToHex,
+};
+
+/* istanbul ignore else */
+if (process.env.NODE_ENV === "test") {
+  module.exports.OP_CODE_HALT = OP_CODE_HALT;
+  module.exports.MAX_TUPLE_SIZE = MAX_TUPLE_SIZE;
+  module.exports.extractBytes = extractBytes;
+  module.exports.intToBytes = intToBytes;
+  module.exports.uBigNumToBytes = uBigNumToBytes;
+  module.exports.Operation = Operation;
+  module.exports.BasicOp = BasicOp;
+  module.exports.ImmOp = ImmOp;
+  module.exports.Value = Value;
 }
 
-},{"ethers":11}],7:[function(require,module,exports){
-const ethers = require('ethers');
-var jaysonBrowserClient = require('jayson/lib/client/browser');
-var fetch = require('node-fetch');
-var promisePoller = require('promise-poller').default;
-const vmTrackerJson = require('./VMTracker.json');
-var ArbValue = require("./arb-value")
+}).call(this,require('_process'))
+},{"_process":2,"ethers":11}],7:[function(require,module,exports){
+/*
+ * Copyright 2019, Offchain Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+"use strict";
+
+const ethers = require("ethers");
+const jaysonBrowserClient = require("jayson/lib/client/browser");
+const fetch = require("node-fetch");
+const promisePoller = require("promise-poller").default;
+const vmTrackerJson = require("./VMTracker.json");
+const ArbValue = require("./arb-value");
 
 function _arbClient(managerAddress) {
   var callServer = function(request, callback) {
     var options = {
-      method: 'POST',
+      method: "POST",
       body: request, // request is a string
       headers: {
-        'Content-Type': 'application/json',
-      }
+        "Content-Type": "application/json",
+      },
     };
 
     fetch(managerAddress, options)
       .then(function(res) {
-        return res.text(); 
+        return res.text();
       })
       .then(function(text) {
-        callback(null, text); 
+        callback(null, text);
       })
-      .catch(function(err) { 
-        callback(err); 
+      .catch(function(err) {
+        callback(err);
       });
   };
 
   return jaysonBrowserClient(callServer, {});
 }
 
-const EVM_REVERT_CODE = 0
-const EVM_INVALID_CODE = 1
-const EVM_RETURN_CODE = 2
-const EVM_STOP_CODE = 3
-const EVM_BAD_SEQUENCE_CODE = 4
+const EVM_REVERT_CODE = 0;
+const EVM_INVALID_CODE = 1;
+const EVM_RETURN_CODE = 2;
+const EVM_STOP_CODE = 3;
+const EVM_BAD_SEQUENCE_CODE = 4;
 
 function logValToLog(value) {
   return {
     contractId: value.get(0).bignum,
     data: ArbValue.sizedByteRangeToHex(value.get(1)),
-    topics: value.contents.slice(2).map(val => val.bignum)
-  }
+    topics: value.contents.slice(2).map(val => val.bignum),
+  };
 }
 
 function stackValueToList(value) {
-  let values = []
+  let values = [];
   while (value.contents.length != 0) {
-    values.push(value.get(1))
-    value = value.get(0)
+    values.push(value.get(1));
+    value = value.get(0);
   }
-  return values
+  return values;
 }
 
 function processMessage(value) {
   try {
-    let wrappedData = value.get(0)
-    let calldata = wrappedData.get(0)
+    let wrappedData = value.get(0);
+    let calldata = wrappedData.get(0);
     return {
       data: ArbValue.sizedByteRangeToHex(calldata.get(0)),
       contractID: ethers.utils.hexDataSlice(
         calldata.get(1).bignum.toHexString(),
-        12
+        12, // TODO: Magic #?
       ),
       sequenceNum: calldata.get(2).bignum.toHexString(),
       timestamp: wrappedData.get(1).bignum.toHexString(),
       blockHeight: wrappedData.get(2).bignum.toHexString(),
       txHash: wrappedData.get(3).bignum.toHexString(),
       tokenType: value.get(3).bignum.toHexString(),
-      value: value.get(2).bignum.toHexString(),
+      value: value.get(2).bignum.toHexString(), // TODO: Only IntValues?
       caller: ethers.utils.hexDataSlice(
         value.get(1).bignum.toHexString(),
-        12
+        12,
       ),
-    }
+    };
   } catch(err) {
-    console.log("processMessage got error", err)
-    return 0
+    console.log("processMessage got error", err);
+    return 0;
   }
-  
+
 }
 
 function processLog(value) {
-  let origMessage = processMessage(value.get(0))
-  let logs = value.get(1)
-  let returnVal = value.get(2)
-  let returnCode = value.get(3)
+  let origMessage = processMessage(value.get(0));
+  let logs = value.get(1);
+  let returnVal = value.get(2);
+  let returnCode = value.get(3);
 
   switch (returnCode.bignum.toNumber()) {
-    case EVM_RETURN_CODE:
-      return {
-        orig: origMessage,
-        data: ArbValue.sizedByteRangeToHex(returnVal),
-        logs: stackValueToList(logs).map(logValToLog),
-        returnType: EVM_RETURN_CODE
-      }
-      break
-    case EVM_REVERT_CODE:
-      return {
-        orig: origMessage,
-        data: ArbValue.sizedByteRangeToHex(returnVal),
-        returnType: EVM_REVERT_CODE
-      }
-      break
-    case EVM_STOP_CODE:
-      return {
-        orig: origMessage,
-        logs: stackValueToList(logs).map(logValToLog),
-        returnType: EVM_STOP_CODE
-      }
-      break
-    case EVM_BAD_SEQUENCE_CODE:
-      return {
-        orig: origMessage,
-        returnType: EVM_BAD_SEQUENCE_CODE
-      }
-      break
-    case EVM_INVALID_CODE:
-      return {
-        orig: origMessage,
-        returnType: EVM_INVALID_CODE
-      }
-      break
-    default:
-      break
+  case EVM_RETURN_CODE:
+    return {
+      orig: origMessage,
+      data: ArbValue.sizedByteRangeToHex(returnVal),
+      logs: stackValueToList(logs).map(logValToLog),
+      returnType: EVM_RETURN_CODE,
+    };
+    break;
+  case EVM_REVERT_CODE:
+    return {
+      orig: origMessage,
+      data: ArbValue.sizedByteRangeToHex(returnVal),
+      returnType: EVM_REVERT_CODE,
+    };
+    break;
+  case EVM_STOP_CODE:
+    return {
+      orig: origMessage,
+      logs: stackValueToList(logs).map(logValToLog),
+      returnType: EVM_STOP_CODE,
+    };
+    break;
+  case EVM_BAD_SEQUENCE_CODE:
+    return {
+      orig: origMessage,
+      returnType: EVM_BAD_SEQUENCE_CODE,
+    };
+    break;
+  case EVM_INVALID_CODE:
+    return {
+      orig: origMessage,
+      returnType: EVM_INVALID_CODE,
+    };
+    break;
+  default:
+    throw "processLogs Invalid EVM return code";
   }
 }
 
 class ArbClient {
   constructor(managerUrl) {
-    this.client = _arbClient(managerUrl)
+    this.client = _arbClient(managerUrl);
   }
 
   async getMessageResult(txHash) {
-    let self = this
+    let self = this;
     let result = await new Promise((resolve, reject) => {
       self.client.request(
-        'Validator.GetMessageResult',
+        "Validator.GetMessageResult",
         [{
-          "txHash": txHash
+          "txHash": txHash,
         }],
         function(err, error, result) {
           if (err) {
-            reject(error)
+            reject(error);
           } else {
-            resolve(result)
+            resolve(result);
           }
         }
       )
     })
     if (result["found"]) {
-      let vmId = await self.getVmID()
+      let vmId = await self.getVmID();
       let val = ArbValue.unmarshal(result["rawVal"]);
-      let evmVal = processLog(val)
+      let evmVal = processLog(val);
       let args = [
         vmId,
         val.get(0).get(0).get(0).hash(),
         evmVal.orig.value,
         ethers.utils.hexDataSlice(
           evmVal.orig.tokenType,
-          11
-        )
-      ]
+          11,
+        ),
+      ];
       let messageHash = ethers.utils.solidityKeccak256(
-        [ 'bytes32', 'bytes32', 'uint256', 'bytes21'],
-        args
+        [ "bytes32", "bytes32", "uint256", "bytes21"], // TODO: bytes21 ?!
+        args,
       );
       return {
         evmVal: evmVal,
         txHash: messageHash
-      }
+      };
     } else {
-      return null
+      return null;
     }
   }
 
   sendMessage(value, sig) {
-    let self = this
+    let self = this;
     return new Promise(function(resolve, reject) {
       self.client.request(
-        'Validator.SendMessage',
+        "Validator.SendMessage",
         [{
           "data": ArbValue.marshal(value),
-          "signature": sig
+          "signature": sig,
         }],
         function(err, error, result) {
           if (err) {
-            reject(error)
+            reject(error);
           } else {
-            resolve(result["hash"])
+            resolve(result["hash"]);
           }
         });
-      })
+    });
   }
 
   call(value, sender) {
-    console.log("Call1")
-    let self = this
+    console.log("Call1");
+    let self = this;
     return new Promise(function(resolve, reject) {
-      console.log("Call2")
+      console.log("Call2");
       self.client.request(
-        'Validator.CallMessage',
+        "Validator.CallMessage",
         [{
           "data": ArbValue.marshal(value),
-          "sender": sender
+          "sender": sender,
         }],
         function(err, error, result) {
-          console.log("Call3", err, error, result)
+          console.log("Call3", err, error, result);
           if (err) {
-            reject(err)
+            reject(err);
           } else if (error) {
-            reject(error)
+            reject(error);
           } else {
             if (result["Success"]) {
-              resolve(result["ReturnVal"])
+              resolve(result["ReturnVal"]);
             } else {
-              reject(new Error("Call was reverted"))
+              reject(new Error("Call was reverted"));
             }
           }
         }
-      )
+      );
     });
   }
 
   findLogs(fromBlock, toBlock, address, topics) {
-    let self = this
+    let self = this;
     return new Promise(function(resolve, reject) {
       return self.client.request(
-        'Validator.FindLogs',
+        "Validator.FindLogs",
         [{
           "fromHeight": fromBlock,
           "toHeight": toBlock,
           "address": address,
-          "topics": topics
+          "topics": topics,
         }],
         function(err, error, result) {
           if (err) {
-            reject(error)
+            reject(error);
           } else {
-            resolve(result["logs"])
+            resolve(result["logs"]);
           }
         }
-      )
-    })
+      );
+    });
   }
 
   getVmID() {
-    let self = this
+    let self = this;
     return new Promise(function(resolve, reject) {
       self.client.request(
-        'Validator.GetVMInfo',
+        "Validator.GetVMInfo",
         [],
         function(err, error, result) {
           if (err) {
-            reject(error)
+            reject(error);
           } else {
-            resolve(result["vmId"])
+            resolve(result["vmID"]);
           }
         }
-      )
+      );
     });
   }
 
   getAssertionCount() {
-    let self = this
+    let self = this;
     return new Promise(function(resolve, reject) {
       self.client.request(
-        'Validator.GetAssertionCount',
+        "Validator.GetAssertionCount",
         [],
         function(err, error, result) {
           if (err) {
-            reject(error)
+            reject(error);
           } else {
-            resolve(result["assertionCount"])
+            resolve(result["assertionCount"]);
           }
         }
       )
@@ -58678,214 +58747,214 @@ class ArbClient {
 }
 
 class ArbProvider extends ethers.providers.BaseProvider {
-    constructor(managerUrl, contracts, provider) {
-        super(123456789)
-        this.chainId = 123456789;
-        this.provider = provider
-        this.client = new ArbClient(managerUrl)
-        let contractAddress = "0x5EBF59dBff8dCDa41610738634b396DfCB24A7c7";
-        this.vmTracker = new ethers.Contract(contractAddress, vmTrackerJson["abi"], provider);
-        this.contracts = {}
-        for (var contract of contracts) {
-          this.contracts[contract.address.toLowerCase()] = contract
-        }
+  constructor(managerUrl, contracts, provider) {
+    super(123456789);
+    this.chainId = 123456789;
+    this.provider = provider;
+    this.client = new ArbClient(managerUrl);
+    let contractAddress = "0x5EBF59dBff8dCDa41610738634b396DfCB24A7c7";
+    this.vmTracker = new ethers.Contract(contractAddress, vmTrackerJson["abi"], provider);
+    this.contracts = {};
+    for (var contract of contracts) {
+      this.contracts[contract.address.toLowerCase()] = contract;
     }
+  }
 
-    getSigner(index) {
-      return new ArbWallet(this.client, this.contracts, this.provider.getSigner(index), this);
-    }
+  getSigner(index) {
+    return new ArbWallet(this.client, this.contracts, this.provider.getSigner(index), this);
+  }
 
-    // This should return a Promise (and may throw errors)
-    // method is the method name (e.g. getBalance) and params is an
-    // object with normalized values passed in, depending on the method
-    perform(method, params) {
-      // console.log("perform", method, params)
-      var self = this
-      switch(method) {
-        case "getCode":
-          if (self.contracts[params.address.toLowerCase()]) {
-            return new Promise((resolve, reject) => {
-              resolve(self.contracts[params.address.toLowerCase()].code)
-            })
-          }
-          break
-        case "getBlockNumber":
-          return this.client.getAssertionCount()
-        case "getTransactionReceipt":
-          return this.client.getMessageResult(params.transactionHash).then(result => {
-            if (result) {
-              let status = 0
-              if (result.evmVal.returnType == EVM_RETURN_CODE || result.evmVal.returnType == EVM_STOP_CODE) {
-                status = 1;
-              }
-              return {
-                "to": result.evmVal.orig.contractID,
-                "from": result.evmVal.orig.caller,
-                "transactionIndex": 0,
-                "gasUsed": 1,
-                "blockHash": result.txHash,
-                "transactionHash": result.txHash,
-                "logs": [],
-                "blockNumber": result.evmVal.orig.blockHeight,
-                "confirmations": 1000,
-                "cumulativeGasUsed": 1,
-                "status": status
-              }
-            } else {
-              return null
-            }
-          })
-        case "getTransaction":
-          var getMessageRequest = () => {
-            return self.client.getMessageResult(params.transactionHash).then(result => {
-              if (result) {
-                return {
-                  "hash": result.txHash,
-                  "blockHash": result.txHash,
-                  "blockNumber": result.evmVal.orig.blockHeight,
-                  "transactionIndex": 0,
-                  "confirmations": 1000,
-                  "from": result.evmVal.orig.caller,
-                  "gasPrice": 1,
-                  "gasLimit": 1,
-                  "to": result.evmVal.orig.contractID,
-                  "cumulativeGasUsed": 1,
-                  "value": result.evmVal.orig.value,
-                  "nonce": 0,
-                  "data": result.evmVal.orig.data,
-                  "status": result.evmVal.returnType == EVM_RETURN_CODE || result.evmVal.returnType == EVM_STOP_CODE
-                }
-              } else {
-                return null
-              }
-            });
-          }
-          return promisePoller({
-            taskFn: getMessageRequest,
-            interval: 100,
-            shouldContinue: (reason, value) => {
-              if (reason) {
-                return true
-              } else if (value) {
-                return false
-              } else {
-                return true
-              }
-            }
-          });
-        case "getLogs":
-          return this.client.findLogs(
-            params.filter.fromBlock,
-            params.filter.toBlock,
-            params.filter.address,
-            params.filter.topics
-          )
+  // This should return a Promise (and may throw errors)
+  // method is the method name (e.g. getBalance) and params is an
+  // object with normalized values passed in, depending on the method
+  perform(method, params) {
+    // console.log("perform", method, params)
+    var self = this;
+    switch(method) {
+    case "getCode":
+      if (self.contracts[params.address.toLowerCase()]) {
+        return new Promise((resolve, reject) => {
+          resolve(self.contracts[params.address.toLowerCase()].code);
+        });
       }
-      let forwardResponse = self.provider.perform(method, params);
-      console.log("Forwarding query to provider", method, forwardResponse);
-      return forwardResponse;
+      break;
+    case "getBlockNumber":
+      return this.client.getAssertionCount();
+    case "getTransactionReceipt":
+      return this.client.getMessageResult(params.transactionHash).then(result => {
+        if (result) {
+          let status = 0;
+          if (result.evmVal.returnType == EVM_RETURN_CODE || result.evmVal.returnType == EVM_STOP_CODE) {
+            status = 1;
+          }
+          return {
+            "to": result.evmVal.orig.contractID,
+            "from": result.evmVal.orig.caller,
+            "transactionIndex": 0,
+            "gasUsed": 1,
+            "blockHash": result.txHash,
+            "transactionHash": result.txHash,
+            "logs": [],
+            "blockNumber": result.evmVal.orig.blockHeight,
+            "confirmations": 1000,
+            "cumulativeGasUsed": 1,
+            "status": status,
+          };
+        } else {
+          return null;
+        }
+      })
+    case "getTransaction":
+      var getMessageRequest = () => {
+        return self.client.getMessageResult(params.transactionHash).then(result => {
+          if (result) {
+            return {
+              "hash": result.txHash,
+              "blockHash": result.txHash,
+              "blockNumber": result.evmVal.orig.blockHeight,
+              "transactionIndex": 0,
+              "confirmations": 1000,
+              "from": result.evmVal.orig.caller,
+              "gasPrice": 1,
+              "gasLimit": 1,
+              "to": result.evmVal.orig.contractID,
+              "cumulativeGasUsed": 1,
+              "value": result.evmVal.orig.value,
+              "nonce": 0,
+              "data": result.evmVal.orig.data,
+              "status": result.evmVal.returnType == EVM_RETURN_CODE || result.evmVal.returnType == EVM_STOP_CODE,
+            };
+          } else {
+            return null;
+          }
+        });
+      };
+      return promisePoller({
+        taskFn: getMessageRequest,
+        interval: 100,
+        shouldContinue: (reason, value) => {
+          if (reason) {
+            return true;
+          } else if (value) {
+            return false;
+          } else {
+            return true;
+          }
+        },
+      });
+    case "getLogs":
+      return this.client.findLogs(
+        params.filter.fromBlock,
+        params.filter.toBlock,
+        params.filter.address,
+        params.filter.topics,
+      );
+    }
+    let forwardResponse = self.provider.perform(method, params);
+    console.log("Forwarding query to provider", method, forwardResponse);
+    return forwardResponse;
+  }
+
+  async call(transaction) {
+    let dest = await transaction.to;
+    let contractData = this.contracts[dest.toLowerCase()];
+    if (contractData) {
+      var maxSeq = ethers.utils.bigNumberify(2);
+      for (var i = 0; i < 255; i++) {
+        maxSeq = maxSeq.mul(2);
+      }
+      maxSeq = maxSeq.sub(2);
+      let arbMsg = new ArbValue.TupleValue([
+        ArbValue.hexToSizedByteRange(transaction.data),
+        new ArbValue.IntValue(dest),
+        new ArbValue.IntValue(maxSeq),
+      ]);
+      let sender = await this.provider.getSigner(0).getAddress();
+      return this.client.call(
+        arbMsg,
+        sender,
+      )
+    } else {
+      return self.provider.call(transaction);
     }
 
-    async call(transaction) {
-      let dest = await transaction.to
-      let contractData = this.contracts[dest.toLowerCase()]
-      if (contractData) {
-        var maxSeq = ethers.utils.bigNumberify(2)
-        for (var i = 0; i < 255; i++) {
-          maxSeq = maxSeq.mul(2);
-        }
-        maxSeq = maxSeq.sub(2)
-        let arbMsg = new ArbValue.TupleValue([
-          ArbValue.hexToSizedByteRange(transaction.data),
-          new ArbValue.IntValue(dest),
-          new ArbValue.IntValue(maxSeq)
-        ]);
-        let sender = await this.provider.getSigner(0).getAddress()
-        return this.client.call(
-          arbMsg,
-          sender
-        )
-      } else {
-        return self.provider.call(transaction)
-      }
-      
-    }
+  }
 }
 
 class ArbWallet extends ethers.Signer {
-    constructor(client, contracts, signer, provider) {
-        super()
-        this.contracts = contracts
-        this.signer = signer
-        this.provider = provider
-        this.client = client
-        this.vmTracker = provider.vmTracker.connect(signer);
+  constructor(client, contracts, signer, provider) {
+    super();
+    this.contracts = contracts;
+    this.signer = signer;
+    this.provider = provider;
+    this.client = client;
+    this.vmTracker = provider.vmTracker.connect(signer);
 
-        let self = this
-        provider.provider.getBlockNumber().then(height => {
-          var seq = ethers.utils.bigNumberify(height)
-          for (var i = 0; i < 128; i++) {
-            seq = seq.mul(2);
-          }
-          var timeStamp = Math.floor(Date.now());
-          seq = seq.add(timeStamp)
-          seq = seq.mul(2);
-          self.seq = seq;
-
-        })
-    }
-
-    getAddress() {
-      return this.signer.getAddress()
-    }
-
-    async sendTransaction(transaction) {
-      let self = this
-      let dest = await transaction.to
-      if (self.contracts[dest.toLowerCase()]) {
-        self.seq = self.seq.add(2)
-        let vmId = await self.client.getVmID()
-        let encodedData = ArbValue.hexToSizedByteRange(transaction.data)
-        let arbMsg = new ArbValue.TupleValue([
-          encodedData,
-          new ArbValue.IntValue(dest),
-          new ArbValue.IntValue(self.seq)
-        ]);
-        if (!transaction.value) {
-          transaction.value = ethers.utils.bigNumberify(0)
-        }
-        let args = [ vmId, arbMsg.hash(), transaction.value, ethers.utils.hexZeroPad("0x00", 21) ];
-        let messageHash = ethers.utils.solidityKeccak256(
-            [ 'bytes32', 'bytes32', 'uint256', 'bytes21'],
-            args
-          );
-        let tx = {
-          hash: messageHash,
-          from: await self.getAddress(),
-          gasPrice: 1,
-          gasLimit: 1,
-          to: dest,
-          value: transaction.value,
-          nonce: self.seq,
-          data: transaction.data,
-        }
-        if (ethers.utils.bigNumberify(transaction.value).eq(0)) {
-          let messageHashBytes = ethers.utils.arrayify(messageHash)
-          let sig = await self.signer.signMessage(messageHashBytes)
-          await self.client.sendMessage(arbMsg, sig)
-        } else {
-          await self.vmTracker.sendEthMessage(vmId, ArbValue.marshal(arbMsg), {
-            value: transaction.value
-          });
-        }
-        return self.provider._wrapTransaction(tx, messageHash)
-      } else {
-        return self.signer.sendTransaction(transaction)
+    let self = this;
+    provider.provider.getBlockNumber().then(height => {
+      var seq = ethers.utils.bigNumberify(height);
+      for (var i = 0; i < 128; i++) {
+        seq = seq.mul(2);
       }
-    };
+      var timeStamp = Math.floor(Date.now());
+      seq = seq.add(timeStamp)
+      seq = seq.mul(2);
+      self.seq = seq;
+    });
+  }
+
+  getAddress() {
+    return this.signer.getAddress();
+  }
+
+  async sendTransaction(transaction) {
+    let self = this;
+    let dest = await transaction.to;
+    if (self.contracts[dest.toLowerCase()]) {
+      self.seq = self.seq.add(2);
+      let vmId = await self.client.getVmID();
+      let encodedData = ArbValue.hexToSizedByteRange(transaction.data);
+      let arbMsg = new ArbValue.TupleValue([
+        encodedData,
+        new ArbValue.IntValue(dest),
+        new ArbValue.IntValue(self.seq),
+      ]);
+      if (!transaction.value) {
+        transaction.value = ethers.utils.bigNumberify(0);
+      }
+      let args = [ vmId, arbMsg.hash(), transaction.value, ethers.utils.hexZeroPad("0x00", 21) ];
+      let messageHash = ethers.utils.solidityKeccak256(
+        ["bytes32", "bytes32", "uint256", "bytes21"],
+        args,
+      );
+      let tx = {
+        hash: messageHash,
+        from: await self.getAddress(),
+        gasPrice: 1,
+        gasLimit: 1,
+        to: dest,
+        value: transaction.value,
+        nonce: self.seq,
+        data: transaction.data,
+      };
+      if (ethers.utils.bigNumberify(transaction.value).eq(0)) {
+        let messageHashBytes = ethers.utils.arrayify(messageHash);
+        let sig = await self.signer.signMessage(messageHashBytes);
+        await self.client.sendMessage(arbMsg, sig);
+      } else {
+        await self.vmTracker.sendEthMessage(vmId, ArbValue.marshal(arbMsg), {
+          value: transaction.value,
+        });
+      }
+      return self.provider._wrapTransaction(tx, messageHash);
+    } else {
+      return self.signer.sendTransaction(transaction);
+    }
+  };
 }
 
-module.exports = ArbProvider
+module.exports = ArbProvider;
+
 },{"./VMTracker.json":5,"./arb-value":6,"ethers":11,"jayson/lib/client/browser":12,"node-fetch":68,"promise-poller":69}],8:[function(require,module,exports){
 (function (process,global,setImmediate){
 /* @preserve
@@ -67270,6 +67339,22 @@ function v4(options, buf, offset) {
 module.exports = v4;
 
 },{"./lib/bytesToUuid":71,"./lib/rng":72}],74:[function(require,module,exports){
+/*
+ * Copyright 2019, Offchain Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License. 
+ */
+
 'use strict';
 
 // Code taken from https://github.com/ethers-io/ethers-web3-bridge
@@ -67963,6 +68048,22 @@ utils.defineProperty(ProviderBridge.prototype, 'send', function(payload) {
 module.exports = ProviderBridge;
 
 },{"./package.json":120,"ethers-providers":80,"ethers-utils":93}],75:[function(require,module,exports){
+/*
+ * Copyright 2019, Offchain Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License. 
+ */
+
 const ethers = require('ethers');
 const ArbProvider = require('arb-ethers-provider');
 var ProviderBridge = require('./ethers-web3-bridge');
@@ -76370,15 +76471,15 @@ assert.equal = function assertEqual(l, r, msg) {
 },{}],120:[function(require,module,exports){
 module.exports={
   "name": "arb-web3-provider",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Arbitrum provider for web3",
   "main": "index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/OffchainLabs/arb-web3-provider.git"
   },
-  "author": "Offchain Labs",
-  "license": "UNLICENSED",
+  "author": "Offchain Labs, Inc.",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/OffchainLabs/arb-web3-provider/issues"
   },
