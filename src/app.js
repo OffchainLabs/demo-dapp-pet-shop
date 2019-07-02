@@ -1,10 +1,10 @@
 const Web3 = require('web3');
-const contracts = require('truffle-contract');
+const contract = require('truffle-contract');
 const ArbProvider = require('arb-web3-provider');
 
 App = {
   web3Provider: null,
-  contracts: contracts,
+  contracts: {},
 
   init: async function() {
     // Load pets.
@@ -61,7 +61,7 @@ App = {
 
   initContract: function() {
     let adoption = require('../build/contracts/Adoption.json');
-    App.contracts.Adoption = TruffleContract(adoption);
+    App.contracts.Adoption = contract(adoption);
     // Set the provider for our contract
     App.contracts.Adoption.setProvider(App.web3Provider);
 
