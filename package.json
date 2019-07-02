@@ -9,7 +9,7 @@
     "dev": "webpack-dev-server --open",
     "watch": "webpack --watch"
   },
-  "author": "",
+  "author": "Offchain Labs, Inc.",
   "license": "Apache-2.0",
   "devDependencies": {
     "webpack": "^4.35.2",
