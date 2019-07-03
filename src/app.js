@@ -1,10 +1,14 @@
+const Web3 = require('web3');
+const contract = require('truffle-contract');
+const ArbProvider = require('arb-web3-provider');
+
 App = {
   web3Provider: null,
   contracts: {},
 
   init: async function() {
     // Load pets.
-    $.getJSON('../pets.json', function(data) {
+    $.getJSON('pets.json', function(data) {
       var petsRow = $('#petsRow');
       var petTemplate = $('#petTemplate');
 
@@ -44,16 +48,7 @@ App = {
       App.web3Provider = new Web3.providers.HttpProvider('http://localhost:7545');
     }
 
-    const contracts_promise = new Promise(function(resolve, reject) {
-      $.getJSON('compiled.json', function(data) {
-        resolve(data)
-      })
-      .fail(function (jqhr, textStatus, error) {
-        reject("Failed to load compiled.json. " + textStatus + ": " + error)
-      });
-    });
-
-    const contracts = await contracts_promise;
+    const contracts = require('../compiled.json');
     App.web3Provider = new ArbProvider(
       'http://localhost:1235',
       contracts,
@@ -65,17 +60,14 @@ App = {
   },
 
   initContract: function() {
-    $.getJSON('Adoption.json', function(data) {
-      // Get the necessary contract artifact file and instantiate it with truffle-contract
-      var AdoptionArtifact = data;
-      App.contracts.Adoption = TruffleContract(AdoptionArtifact);
+    let adoption = require('../build/contracts/Adoption.json');
+    App.contracts.Adoption = contract(adoption);
+    // Set the provider for our contract
+    App.contracts.Adoption.setProvider(App.web3Provider);
 
-      // Set the provider for our contract
-      App.contracts.Adoption.setProvider(App.web3Provider);
+    // Use our contract to retrieve and mark the adopted pets
+    App.markAdopted();
 
-      // Use our contract to retrieve and mark the adopted pets
-      return App.markAdopted();
-    });
     return App.bindEvents();
   },
 
