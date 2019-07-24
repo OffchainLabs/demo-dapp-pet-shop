@@ -49,7 +49,7 @@ App = {
     }
 
     const contracts = require('../compiled.json');
-    App.web3Provider = new ArbProvider(
+    App.web3Provider = await ArbProvider(
       'http://localhost:1235',
       contracts,
       App.web3Provider
