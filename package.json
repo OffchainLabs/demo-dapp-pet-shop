@@ -1,25 +1,34 @@
 {
   "name": "pet-shop",
-  "version": "0.1.0",
-  "description": "",
+  "version": "0.2.0",
+  "description": "Pet shop demo dApp",
+  "author": "Offchain Labs, Inc.",
+  "license": "Apache-2.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "build": "webpack",
     "start": "webpack-dev-server --open",
     "dev": "webpack-dev-server --open",
     "watch": "webpack --watch"
   },
-  "author": "Offchain Labs, Inc.",
-  "license": "Apache-2.0",
   "devDependencies": {
-    "webpack": "^4.35.2",
-    "webpack-cli": "^3.3.5",
-    "webpack-dev-server": "^3.7.2"
+    "css-loader": "^3.4.2",
+    "file-loader": "^6.0.0",
+    "style-loader": "^1.1.3",
+    "svg-inline-loader": "^0.8.0",
+    "truffle": "^5.1.32",
+    "webpack": "^4.41.5",
+    "webpack-cli": "~3.3.10",
+    "webpack-dev-server": "~3.11.0"
   },
   "dependencies": {
-    "arb-truffle-provider": "https://github.com/OffchainLabs/arb-truffle-provider.git",
-    "arb-web3-provider": "https://github.com/offchainlabs/arb-web3-provider",
-    "truffle-contract": "^4.0.23",
-    "web3": "^1.0.0-beta.55"
+    "arb-provider-truffle": "^0.6.5",
+    "arb-provider-web3": "^0.6.5",
+    "bootstrap": "^4.4.1",
+    "jquery": "^3.5.0",
+    "web3": "~1.2.6"
+  },
+  "workspaces": {
+    "nohoist": []
   }
 }
