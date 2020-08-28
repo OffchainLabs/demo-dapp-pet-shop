@@ -3,11 +3,10 @@
 
 var $ = require('jquery')
 const Web3 = require('web3')
-const ArbProvider = require('arb-provider-web3')
 
 require('bootstrap/dist/css/bootstrap.min.css')
 
-let App = {
+const App = {
   web3: null,
   contracts: {},
 
@@ -33,38 +32,41 @@ let App = {
   },
 
   initWeb3: async function () {
-    // Modern dapp browsers...
-    let web3Provider = null
+    var standardProvider = null
     if (window.ethereum) {
-      web3Provider = window.ethereum
+      standardProvider = window.ethereum
       try {
-        // Request account access
+        // Request account access if needed
         await window.ethereum.enable()
       } catch (error) {
-        // User denied account access...
-        console.error('User denied account access')
+        console.log('User denied account access')
       }
-    }
-    // Legacy dapp browsers...
-    else if (window.web3) {
-      web3Provider = window.web3.currentProvider
-    }
-    // If no injected web3 instance is detected, fall back to Ganache
-    else {
-      web3Provider = new Web3.providers.HttpProvider('http://localhost:7545')
+    } else if (window.web3) {
+      // Legacy dapp browsers...
+      standardProvider = window.web3.currentProvider
+    } else {
+      // Non-dapp browsers...
+      console.log(
+        'Non-Ethereum browser detected. You should consider trying MetaMask!'
+      )
     }
 
-    let provider = ArbProvider('http://localhost:1235', web3Provider)
-    App.web3 = new Web3(provider) // eslint-disable-line require-atomic-updates
+    App.web3 = new Web3(standardProvider) // eslint-disable-line require-atomic-updates
 
     return App.initContract()
   },
 
-  initContract: function () {
-    let adoption = require('../build/contracts/Adoption.json')
+  initContract: async function () {
+    const adoption = require('../build/contracts/Adoption.json')
+
+    const netid = await App.web3.eth.net.getId()
+
+    console.log("netid", netid)
+    console.log("adoption.networks", adoption.networks)
+
     App.contracts.Adoption = new App.web3.eth.Contract(
       adoption.abi,
-      adoption.networks['123456789'].address
+      adoption.networks[netid].address
     )
 
     // Use our contract to retrieve and mark the adopted pets
@@ -79,7 +81,7 @@ let App = {
 
   markAdopted: async function () {
     try {
-      let adopters = await App.contracts.Adoption.methods.getAdopters().call()
+      const adopters = await App.contracts.Adoption.methods.getAdopters().call()
       for (let i = 0; i < adopters.length; i++) {
         if (adopters[i] !== '0x0000000000000000000000000000000000000000') {
           $('.panel-pet')
@@ -99,7 +101,9 @@ let App = {
     var petId = parseInt($(event.target).data('id'))
 
     try {
-      let accounts = await App.web3.eth.getAccounts()
+      const accounts = await App.web3.eth.getAccounts()
+      
+      // console.log("GAS", await App.contracts.Adoption.methods.estimateGas())
       await App.contracts.Adoption.methods
         .adopt(petId)
         .send({ from: accounts[0] })
