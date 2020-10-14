@@ -9,7 +9,9 @@
     "build": "webpack",
     "start": "webpack-dev-server --open",
     "dev": "webpack-dev-server --open",
-    "watch": "webpack --watch"
+    "watch": "webpack --watch",
+    "migrate:local": "truffle migrate --network arbitrum",
+    "migrate:testnet": "truffle migrate --network remote_arbitrum"
   },
   "devDependencies": {
     "@truffle/hdwallet-provider": "^1.0.39",

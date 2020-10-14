@@ -21,6 +21,15 @@ module.exports = {
       network_id: '*', // Match any network id
       gasPrice: 0,
     },
+    remote_arbitrum: {
+      provider: function () {
+        return wrapProvider(
+          new HDWalletProvider(mnemonic, 'https://node.offchainlabs.com:8547/')
+        )
+      },
+      network_id: '*', // Match any network id
+      gasPrice: 0,
+    },
   },
   compilers: {
     solc: {
